@@ -30,8 +30,6 @@ check_and_install_maven
 check_and_install_node
 check_and_install_npm
 
-# 3. Uygulama Docker Image'larını Build Et
-# 3a. Java repo'ları (3 repo: account-manager, conference-manager,
-#     notification-manager)
 build_java_application_images
 
+build_node_application_images
