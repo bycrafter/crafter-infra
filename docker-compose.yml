@@ -1,0 +1,330 @@
+services:
+  account-postgres:
+    container_name: account-postgres
+    image: postgres
+    environment:
+      POSTGRES_USER: ${ACCOUNT_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${ACCOUNT_POSTGRES_PASSWORD}
+      PG_DATA: /data/postgres
+      POSTGRES_DB: account_db
+    volumes:
+      - account_postgres_data:/data/postgres
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ACCOUNT_POSTGRES_USER} -d account_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - postgres
+    restart: unless-stopped
+  conference-postgres:
+    container_name: conference-postgres
+    image: postgres
+    environment:
+      POSTGRES_USER: ${CONFERENCE_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${CONFERENCE_POSTGRES_PASSWORD}
+      PG_DATA: /data/postgres
+      POSTGRES_DB: conference_db
+    volumes:
+      - conference_postgres_data:/data/postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CONFERENCE_POSTGRES_USER} -d conference_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - postgres
+    restart: unless-stopped
+
+  redis:
+    image: redis
+    container_name: redis
+    command: [
+      "redis-server",
+      "--user", "default", "off",
+      "--user", "${REDIS_USERNAME}", "on", ">${REDIS_PASSWORD}", "~*", "+@all"
+    ]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spring
+      - redis
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:29092"
+    environment:
+      # KRaft için gerekli minimum ayarlar
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # İki farklı listener tanımlanıyor:
+      #  - PLAINTEXT (9092)      : docker network'ü içindeki servisler için
+      #                            (account-manager, conference-manager,
+      #                            notification-manager -> "kafka:9092")
+      #  - PLAINTEXT_HOST (29092): host makineden bağlanmak için; container
+      #                            içinde 29092'de dinler, host'ta ise
+      #                            "9092:29092" port map'i sayesinde
+      #                            "localhost:9092" olarak erişilebilir.
+      # Aynı listener adı altında iki farklı advertised adres verilemez,
+      # bu nedenle "localhost:9092" ve "kafka:9092" adreslerinin ikisinin
+      # de aynı anda çalışabilmesi için ayrı listener/port kullanılıyor.
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Tek node (Broker) çalıştığımız için replikasyon sınırlarını 1 yapıyoruz
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    networks:
+      - spring
+
+  notification-mongodb:
+    image: mongo:7
+    container_name: notification-mongodb
+    restart: unless-stopped
+    environment:
+      # Root kullanıcısı sadece container ilk açılışında (init script'lerin
+      # çalışabilmesi için) mongo image'ının kendisi tarafından kullanılır.
+      # Uygulama bu kullanıcıyı KULLANMAZ, sadece normal (app) kullanıcı ile bağlanır.
+      MONGO_INITDB_ROOT_USERNAME: mongoadmin
+      MONGO_INITDB_ROOT_PASSWORD: mongoadmin123
+      MONGO_INITDB_DATABASE: notification_db
+      # notification-manager uygulamasının kullanacağı normal (non-root) kullanıcı
+      MONGO_APP_USERNAME: ${MONGO_INITDB_USERNAME}
+      MONGO_APP_PASSWORD: ${MONGO_INITDB_PASSWORD}
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./.docker/mongo-data:/data/db
+      - ./.docker/mongo-init/mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
+    networks:
+      - spring
+
+  # =====================================================================
+  #                       APPLICATION SERVICES
+  # =====================================================================
+  # Build context'leri kardeş repo'lara işaret eder (bu repo'nun bir üst
+  # dizininde bulunmaları beklenir: bycrafter/account-manager, ...). Her
+  # servisin kendi repo'sunda zaten bir Dockerfile bulunduğundan bu repoya
+  # ayrı bir Dockerfile eklemeye gerek yoktur; sadece build context'leri ve
+  # ortam değişkenleri buradan (tek noktadan) yönetilir.
+  #
+  # Java servisleri (account-manager, conference-manager,
+  # notification-manager) runtime-only Dockerfile kullanır: build'den önce
+  # jar'ın host üzerinde üretilmiş olması gerekir, örn.:
+  #   mvn -pl account-manager-app -am package -DskipTests
+  #   mvn -pl conference-manager-app -am package -DskipTests
+  #   mvn -pl notification-manager-app -am package -DskipTests
+  # Ayrıca bu servisler spring.config.import: aws-secretsmanager kullandığı
+  # için AWS kimlik bilgilerinin (host'ta "aws configure" ile ayarlanmış
+  # olanların) container'a aktarılması gerekir; aşağıda ${AWS_*} ile host
+  # ortamından geçirilir.
+  account-manager:
+    build:
+      context: ../account-manager
+      dockerfile: Dockerfile
+    container_name: account-manager
+    depends_on:
+      account-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_R2DBC_URL: r2dbc:postgresql://account-postgres:5432/account_db
+      postgres_username: ${ACCOUNT_POSTGRES_USER}
+      postgres_password: ${ACCOUNT_POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      redis_username: ${REDIS_USERNAME}
+      redis_password: ${REDIS_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      FLYWAY_URL: jdbc:postgresql://account-postgres:5432/account_db
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+    ports:
+      - "8085:8085"
+      - "6065:6065"
+    # kafka servisindeki gibi: bu container'ı kapatıp account-manager'ı
+    # IDE'den (host üzerinde) debug amacıyla çalıştırırsanız, host.docker.internal
+    # sayesinde diğer container'lar sizi "host.docker.internal:6065/8085" ile
+    # bulabilir (bkz. conference-web-api'deki ACCOUNT_MANAGER_GRPC_URL override'ı).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - postgres
+      - spring
+      - redis
+
+  conference-manager:
+    build:
+      context: ../conference-manager
+      dockerfile: Dockerfile
+    container_name: conference-manager
+    depends_on:
+      conference-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_R2DBC_URL: r2dbc:postgresql://conference-postgres:5432/conference_db
+      postgres_username: ${CONFERENCE_POSTGRES_USER}
+      postgres_password: ${CONFERENCE_POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      redis_username: ${REDIS_USERNAME}
+      redis_password: ${REDIS_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      FLYWAY_URL: jdbc:postgresql://conference-postgres:5432/conference_db
+      master_encryption_key: ${MASTER_ENCRYPTION_KEY:-changeit-changeit-changeit-1234}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+    ports:
+      - "8086:8086"
+      - "6075:6075"
+    # account-manager'daki aynı sebep: bu servisi kapatıp IDE'den çalıştırırsanız,
+    # diğer container'lar host.docker.internal üzerinden size erişebilir
+    # (bkz. conference-web-api'deki CONFERENCE_MANAGER_GRPC_URL override'ı).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - postgres
+      - spring
+      - redis
+
+  notification-manager:
+    build:
+      context: ../notification-manager
+      dockerfile: Dockerfile
+    container_name: notification-manager
+    depends_on:
+      - notification-mongodb
+      - kafka
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # NOT: Spring Boot 4.x'te MongoDB özellik prefix'i "spring.data.mongodb"
+      # yerine "spring.mongodb" olarak değiştirildi (bkz. notification-manager
+      # uygulamasının application.yml'i). Eski SPRING_DATA_MONGODB_URI değişkeni
+      # bu sürümde sessizce yok sayılır ve uygulama localhost'a düşer.
+      SPRING_MONGODB_URI: mongodb://${MONGO_INITDB_USERNAME}:${MONGO_INITDB_PASSWORD}@notification-mongodb:27017/notification_db
+      mongo_username: ${MONGO_INITDB_USERNAME}
+      mongo_password: ${MONGO_INITDB_PASSWORD}
+      sender_email: ${SENDER_EMAIL:-}
+      sender_email_app_password: ${SENDER_EMAIL_APP_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+    ports:
+      - "8095:8095"
+    # bu servisi kapatıp IDE'den çalıştırırsanız, diğer container'lar
+    # host.docker.internal üzerinden size erişebilir.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - spring
+
+  # Node/NestJS BFF: NODE_AUTH_TOKEN sadece build-time'da @bycrafter/*-grpc-contract
+  # paketlerini GitHub Packages'tan çekmek için kullanılır (bkz. conference-web-api/Dockerfile).
+  conference-web-api:
+    build:
+      context: ../conference-web-api
+      dockerfile: Dockerfile
+      args:
+        NODE_AUTH_TOKEN: ${NODE_AUTH_TOKEN:-}
+    container_name: conference-web-api
+    depends_on:
+      redis:
+        condition: service_healthy
+      account-manager:
+        condition: service_started
+      conference-manager:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:5173}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: ${REDIS_USERNAME}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # NOT: account-manager veya conference-manager container'larını kapatıp
+      # IDE üzerinden (host'ta) debug amacıyla çalıştırırsanız, aşağıdaki
+      # değerleri .env dosyasında "host.docker.internal:6065" /
+      # "host.docker.internal:6075" olarak override edin; bu container'a
+      # tanımlı extra_hosts sayesinde host.docker.internal, host makinenizin
+      # kendisine (dolayısıyla IDE'de dinlediğiniz porta) işaret eder.
+      ACCOUNT_MANAGER_GRPC_URL: ${ACCOUNT_MANAGER_GRPC_URL:-account-manager:6065}
+      CONFERENCE_MANAGER_GRPC_URL: ${CONFERENCE_MANAGER_GRPC_URL:-conference-manager:6075}
+      GRPC_TIMEOUT_MS: ${GRPC_TIMEOUT_MS:-5000}
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      CIRCUIT_BREAKER_RESET_TIMEOUT_MS: ${CIRCUIT_BREAKER_RESET_TIMEOUT_MS:-10000}
+      THROTTLE_TTL_MS: ${THROTTLE_TTL_MS:-60000}
+      THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
+    ports:
+      - "3000:3000"
+    # account-manager/conference-manager IDE'den çalışırken bu container'ın
+    # host.docker.internal üzerinden host makineye erişebilmesi için.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - spring
+      - redis
+
+  conference-web-app:
+    build:
+      context: ../conference-web-app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/v1}
+    container_name: conference-web-app
+    depends_on:
+      - conference-web-api
+    ports:
+      - "8080:80"
+    volumes:
+      # SPA'nın statik nginx sunucusu varsayılan olarak sadece GET/HEAD
+      # destekler; /v1 altındaki POST istekleri (örn. /v1/auth/login) bu
+      # config olmadan "405 Not Allowed" döner. Bu dosya /v1/ isteklerini
+      # conference-web-api servisine proxy'ler.
+      - ./.docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - spring
+
+networks:
+  postgres:
+    driver: bridge
+  spring:
+    driver: bridge
+  redis:
+    driver: bridge
+
+volumes:
+  account_postgres_data:
+  conference_postgres_data:
+  kafkadata:

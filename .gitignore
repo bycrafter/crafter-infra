@@ -1,0 +1,4 @@
+.idea
+.junie
+.docker/mongo-data
+.env
