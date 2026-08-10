@@ -17,6 +17,7 @@ This repository is the **master orchestrator** of the YACS platform. It doesn't 
 - [Directory Structure](#directory-structure)
 - [Configuration (.env)](#configuration-env)
 - [Quick Start](#quick-start)
+- [Manual Setup (Without Running the Scripts)](#manual-setup-without-running-the-scripts)
 - [Services & Ports](#services--ports)
 - [Networks & Volumes](#networks--volumes)
 - [Useful Commands](#useful-commands)
@@ -46,14 +47,104 @@ Each application service (`account-manager`, `conference-manager`, `notification
 Make sure the following tools are installed on your machine:
 
 - **Git**
-- **Docker** (Engine 20.10+)
-- **Docker Compose** (v2 plugin, i.e. `docker compose`, or standalone `docker-compose`)
+- **Docker** (Engine 20.10+) — checked and installed automatically by `docker-image-build.sh` / `start-infra.sh` if missing (on Linux this also enables the `docker` service and adds your user to the `docker` group; on macOS/Windows it installs Docker Desktop, which you must start manually at least once)
+- **Docker Compose** (v2 plugin, i.e. `docker compose`, or standalone `docker-compose`) — also checked and installed automatically alongside Docker
 - **Java 25+ & Maven** — required to build the three Java services' jars before their Docker images can be built (the `docker-image-build.sh` / `start-infra.sh` scripts will install Maven automatically if it's missing)
 - **Node.js & npm** — required to build `conference-web-api` / `conference-web-app` images
 - **AWS CLI** — required by `start-infra.sh` to pull secrets from AWS Secrets Manager (installed automatically by the script if missing)
+- **jq** — used to parse the JSON secrets returned by AWS Secrets Manager (installed automatically by the scripts if missing)
+- **unzip** — required to install AWS CLI on Linux (installed automatically by the scripts if missing)
 - Valid **AWS credentials** with access to the `test/bycrafter/*` secrets in Secrets Manager (region `eu-central-1`)
 
-> The setup scripts (`lib-infra.sh`) will attempt to auto-install missing dependencies (`jq`, `unzip`, `maven`, `node`, `npm`, `aws-cli`) on Linux, macOS and Windows (Git Bash), but it's recommended to have them ready beforehand.
+> The setup scripts (`lib-infra.sh`) will attempt to auto-install missing dependencies (`docker`, `docker compose`, `jq`, `unzip`, `maven`, `node`, `npm`, `aws-cli`) on Linux, macOS and Windows (Git Bash), but it's recommended to have them ready beforehand. **Docker Desktop on macOS/Windows still needs to be started manually at least once after installation.**
+
+### Installing prerequisites manually
+
+If you'd rather not rely on the scripts' auto-install logic (or you can't execute `.sh` files directly on your machine), install each tool yourself using the commands below.
+
+**Linux (Debian/Ubuntu — `apt-get`):**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git unzip jq maven docker.io docker-compose-plugin nodejs npm
+```
+
+**Linux (Fedora — `dnf`):**
+
+```bash
+sudo dnf install -y git unzip jq maven docker docker-compose-plugin nodejs npm
+```
+
+**Linux (CentOS/RHEL — `yum`):**
+
+```bash
+sudo yum install -y git unzip jq maven docker docker-compose-plugin nodejs npm
+```
+
+**Linux (Arch — `pacman`):**
+
+```bash
+sudo pacman -Sy --noconfirm git unzip jq maven docker docker-compose nodejs npm
+```
+
+> On Linux, after installing Docker via a package manager, enable the service and add your user to the `docker` group so you don't need `sudo` for every command:
+>
+> ```bash
+> sudo systemctl enable --now docker
+> sudo usermod -aG docker "$USER"
+> # log out and back in (or run `newgrp docker`) for the group change to take effect
+> ```
+
+**AWS CLI on Linux** (not available via most package managers, install from the official installer):
+
+```bash
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip -q awscliv2.zip
+sudo ./aws/install --update
+rm -rf awscliv2.zip aws/
+```
+
+**macOS (Homebrew):**
+
+```bash
+brew install git unzip jq maven awscli node
+brew install --cask docker
+# Then start Docker Desktop once from Applications so its background daemon is running
+```
+
+**Windows (winget, in PowerShell or Git Bash):**
+
+```powershell
+winget install -e --id Git.Git
+winget install -e --id jqlang.jq
+winget install -e --id GNU.Unzip
+winget install -e --id Apache.Maven
+winget install -e --id OpenJS.NodeJS
+winget install -e --id Amazon.AWSCLI
+winget install -e --id Docker.DockerDesktop
+# Then start Docker Desktop once (and possibly reboot) so its background daemon is running
+```
+
+After installing, verify each tool is on your `PATH`:
+
+```bash
+git --version
+docker --version
+docker compose version   # or: docker-compose --version
+mvn --version
+node --version
+npm --version
+aws --version
+jq --version
+unzip -v
+```
+
+Finally, configure your AWS credentials (needed to fetch secrets):
+
+```bash
+aws configure
+# Enter your AWS Access Key ID, Secret Access Key, default region (eu-central-1) and output format (json)
+```
 
 ## Directory Structure
 
@@ -146,6 +237,12 @@ After `start-infra.sh` completes, the whole YACS platform is up and running:
 - Zipkin tracing UI: **http://localhost:9411**
 
 > `start-infra.sh` always tears down any previous stack first (`docker compose down -v`, plus force-removal of known containers and the local Mongo data directory), so it's safe to re-run at any time to get a clean restart.
+
+## Manual Setup (Without Running the Scripts)
+
+If you can't or don't want to execute `docker-image-build.sh` / `start-infra.sh` directly (e.g. `.sh` files are blocked on your machine), you don't need to reproduce every step of the scripts manually — you only need to install the required tools yourself. Once they're installed and on your `PATH`, the scripts (or the Quick Start commands) will work normally.
+
+See [Installing prerequisites manually](#installing-prerequisites-manually) above for the exact per-platform commands to install `git`, `docker`, `docker compose`, `mvn`, `node`, `npm`, `aws` (CLI), `jq` and `unzip`, then run `aws configure` to set up your AWS credentials.
 
 ## Services & Ports
 

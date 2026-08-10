@@ -115,6 +115,84 @@ check_and_install_git() {
     fi
 }
 
+# --- DOCKER KURULUM METODU (Evrensel) ---
+check_and_install_docker() {
+    if command -v docker &> /dev/null; then
+        echo "✅ Docker zaten kurulu ($(docker --version))."
+        return
+    fi
+
+    echo "⚠️  Docker bulunamadı! Kuruluyor..."
+    local OS
+    OS=$(detect_os)
+
+    if [ "$OS" = "Linux" ]; then
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y docker docker-compose-plugin
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y docker docker-compose-plugin
+        elif command -v pacman &> /dev/null; then
+            sudo pacman -Sy --noconfirm docker docker-compose
+        else
+            echo "❌ Linux paket yöneticisi bulunamadı. Lütfen Docker'ı manuel kurun: https://docs.docker.com/engine/install/"
+            exit 1
+        fi
+        sudo systemctl enable --now docker 2>/dev/null || true
+        if ! groups "$USER" | grep -q docker; then
+            sudo usermod -aG docker "$USER" || true
+            echo "⚠️  '$USER' kullanıcısı 'docker' grubuna eklendi. Değişikliğin etkili olması için terminali kapatıp yeniden açmanız (veya yeniden giriş yapmanız) gerekir."
+        fi
+    elif [ "$OS" = "Mac" ]; then
+        brew install --cask docker
+        echo "⚠️  Docker Desktop kuruldu; devam etmeden önce 'Applications' klasöründen bir kez başlatıp arka planda çalıştığından emin olun."
+    elif [ "$OS" = "Windows" ]; then
+        if command -v winget.exe &> /dev/null; then
+            echo "🪟 Windows paket yöneticisi (winget) ile Docker Desktop kuruluyor..."
+            winget.exe install -e --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements --silent
+            echo "⚠️  Docker Desktop kuruldu; bilgisayarınızı yeniden başlatıp Docker Desktop'ı bir kez manuel çalıştırmanız gerekebilir."
+        else
+            echo "❌ Windows'ta 'winget' bulunamadı. Lütfen Docker Desktop'ı manuel kurun: https://www.docker.com/products/docker-desktop/"
+            exit 1
+        fi
+    else
+        echo "❌ Desteklenmeyen işletim sistemi."
+        exit 1
+    fi
+}
+
+check_and_install_docker_compose() {
+    if docker compose version &> /dev/null; then
+        echo "✅ Docker Compose (v2 plugin) zaten kurulu."
+        return
+    elif command -v docker-compose &> /dev/null; then
+        echo "✅ Docker Compose (standalone) zaten kurulu ($(docker-compose --version))."
+        return
+    fi
+
+    echo "⚠️  Docker Compose bulunamadı! Kuruluyor..."
+    local OS
+    OS=$(detect_os)
+
+    if [ "$OS" = "Linux" ]; then
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y docker-compose-plugin
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y docker-compose-plugin
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y docker-compose-plugin
+        elif command -v pacman &> /dev/null; then
+            sudo pacman -Sy --noconfirm docker-compose
+        else
+            echo "❌ Linux paket yöneticisi bulunamadı. Lütfen Docker Compose'u manuel kurun: https://docs.docker.com/compose/install/"
+            exit 1
+        fi
+    else
+        echo "ℹ️  Docker Compose, Docker Desktop ile birlikte gelir; ayrıca bir kurulum gerekmez."
+    fi
+}
+
 # --- UYGULAMA REPO'LARINI KLONLAMA METODU ---
 # 5 uygulama repo'sunu (account-manager, conference-manager,
 # notification-manager, conference-web-api, conference-web-app) crafter-infra

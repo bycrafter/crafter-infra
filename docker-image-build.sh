@@ -26,6 +26,8 @@ echo "⚙️  YACS Docker Image Build Sihirbazı Çalışıyor..."
 clone_application_repositories
 
 # 2. Gereksinimleri Kontrol Et ve Gerekirse Kur
+check_and_install_docker
+check_and_install_docker_compose
 check_and_install_maven
 check_and_install_node
 check_and_install_npm

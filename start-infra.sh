@@ -16,6 +16,8 @@ source "$(dirname "$0")/lib-infra.sh"
 echo "⚙️  YACS Altyapı Başlatma Sihirbazı Çalışıyor..."
 
 # 1. Gereksinimleri Kontrol Et ve Gerekirse Kur
+check_and_install_docker
+check_and_install_docker_compose
 check_and_install_unzip
 check_and_install_jq
 check_and_install_aws_cli
