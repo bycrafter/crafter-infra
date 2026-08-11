@@ -204,6 +204,13 @@ cd crafter-infra
 
 > Each Java repository must be buildable with `mvn -pl <service>-app -am package -DskipTests`, since the Java services use runtime-only Dockerfiles that expect a pre-built jar on the host.
 
+Alternatively, once `crafter-infra` itself is cloned, you can run the standalone `clone-repos.sh` script to automatically clone the remaining 5 sibling repositories (`account-manager`, `conference-manager`, `notification-manager`, `conference-web-api`, `conference-web-app`) into the parent directory — it skips any repository that's already cloned, so it's safe to re-run:
+
+```bash
+chmod +x clone-repos.sh
+./clone-repos.sh
+```
+
 ## Configuration (.env)
 
 Before running anything, create your local `.env` file from the provided `.env.example` in the root of `crafter-infra`:
