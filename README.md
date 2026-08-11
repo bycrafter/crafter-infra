@@ -47,20 +47,21 @@ Each application service (`account-manager`, `conference-manager`, `notification
 Make sure the following tools are installed on your machine:
 
 - **Git**
-- **Docker** (Engine 20.10+) — checked and installed automatically by `docker-image-build.sh` / `start-infra.sh` if missing (on Linux this also enables the `docker` service and adds your user to the `docker` group; on macOS/Windows it installs Docker Desktop, which you must start manually at least once)
-- **Docker Compose** (v2 plugin, i.e. `docker compose`, or standalone `docker-compose`) — also checked and installed automatically alongside Docker
-- **Java 25+ & Maven** — required to build the three Java services' jars before their Docker images can be built (the `docker-image-build.sh` / `start-infra.sh` scripts will install Maven automatically if it's missing)
+- **Docker** (Engine 20.10+)
+- **Docker Compose** (v2 plugin, i.e. `docker compose`, or standalone `docker-compose`)
+- **Java 25+ & Maven** — required to build the three Java services' jars before their Docker images can be built
 - **Node.js & npm** — required to build `conference-web-api` / `conference-web-app` images
-- **AWS CLI** — required by `start-infra.sh` to pull secrets from AWS Secrets Manager (installed automatically by the script if missing)
-- **jq** — used to parse the JSON secrets returned by AWS Secrets Manager (installed automatically by the scripts if missing)
-- **unzip** — required to install AWS CLI on Linux (installed automatically by the scripts if missing)
+- **AWS CLI** — required by `start-infra.sh` to pull secrets from AWS Secrets Manager
+- **jq** — used to parse the JSON secrets returned by AWS Secrets Manager
+- **unzip** — required to install AWS CLI on Linux
 - Valid **AWS credentials** with access to the `test/bycrafter/*` secrets in Secrets Manager (region `eu-central-1`)
+- **Windows only:** **WSL2** (Windows Subsystem for Linux, version 2) — required by Docker Desktop as its backend, plus a Linux distribution (e.g. Ubuntu) installed under WSL2 to get a proper Bash shell for running the `.sh` scripts (see [Windows-specific setup](#windows-specific-setup-wsl2) below)
 
-> The setup scripts (`lib-infra.sh`) will attempt to auto-install missing dependencies (`docker`, `docker compose`, `jq`, `unzip`, `maven`, `node`, `npm`, `aws-cli`) on Linux, macOS and Windows (Git Bash), but it's recommended to have them ready beforehand. **Docker Desktop on macOS/Windows still needs to be started manually at least once after installation.**
+> The scripts (`lib-infra.sh`) **no longer install any dependency automatically**. `docker-image-build.sh` / `start-infra.sh` only *check* that `git`, `docker`, `docker compose`, `jq`, `unzip` and the `aws` CLI are already present on your `PATH` and will exit with an error message if any of them is missing — you must install every tool yourself beforehand (see below).
 
 ### Installing prerequisites manually
 
-If you'd rather not rely on the scripts' auto-install logic (or you can't execute `.sh` files directly on your machine), install each tool yourself using the commands below.
+Since the scripts only check for (and never install) dependencies, you must install each tool yourself using the commands below before running `docker-image-build.sh` / `start-infra.sh`.
 
 **Linux (Debian/Ubuntu — `apt-get`):**
 
@@ -124,6 +125,33 @@ winget install -e --id Amazon.AWSCLI
 winget install -e --id Docker.DockerDesktop
 # Then start Docker Desktop once (and possibly reboot) so its background daemon is running
 ```
+
+#### Windows-specific setup (WSL2)
+
+Docker Desktop on Windows **requires WSL2** (Windows Subsystem for Linux, version 2) as its backend — plain Hyper-V-only setups or older WSL1 installs are not sufficient. Also, since `docker-image-build.sh` / `start-infra.sh` are Bash scripts, you need a real Bash shell to run them (Git Bash works for most commands, but running the scripts *inside* a WSL2 Linux distribution is the most reliable option).
+
+1. **Enable WSL2 and install a Linux distribution** (run in an elevated/Administrator PowerShell):
+
+   ```powershell
+   wsl --install
+   # Installs WSL2 + the default Ubuntu distribution. Reboot when prompted.
+   ```
+
+   If WSL was already installed previously (e.g. only WSL1), make sure it's upgraded to version 2:
+
+   ```powershell
+   wsl --set-default-version 2
+   wsl --update
+   wsl --list --verbose   # confirm your distro shows "VERSION 2"
+   ```
+
+2. **Verify virtualization is enabled** in your BIOS/UEFI (Intel VT-x / AMD-V) — WSL2 and Docker Desktop won't start without it.
+
+3. **Install/reconfigure Docker Desktop to use the WSL2 backend**: open Docker Desktop → *Settings* → *General* → enable **"Use the WSL 2 based engine"**, then under *Resources* → *WSL Integration*, enable integration with your installed distro (e.g. Ubuntu).
+
+4. **Install the remaining tools inside your WSL2 distro** (it behaves like a real Linux box), using the **Linux (Debian/Ubuntu — `apt-get`)** commands from the section above — this gives you a native Bash environment where `git`, `jq`, `unzip`, `maven`, `node`/`npm`, `aws` CLI and the Docker CLI (talking to the Docker Desktop daemon) all work exactly like on Linux.
+
+5. Run `docker-image-build.sh` / `start-infra.sh` **from inside the WSL2 terminal** (not plain `cmd.exe`/PowerShell) for the smoothest experience.
 
 After installing, verify each tool is on your `PATH`:
 
