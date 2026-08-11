@@ -139,6 +139,9 @@ services:
   # ortamından geçirilir.
   account-manager:
     image: proysis/account-manager:latest
+    build:
+      context: ../account-manager
+      dockerfile: Dockerfile
     container_name: account-manager
     depends_on:
       account-postgres:
@@ -178,6 +181,9 @@ services:
 
   conference-manager:
     image: proysis/conference-manager:latest
+    build:
+      context: ../conference-manager
+      dockerfile: Dockerfile
     container_name: conference-manager
     depends_on:
       conference-postgres:
@@ -216,6 +222,9 @@ services:
 
   notification-manager:
     image: proysis/notification-manager:latest
+    build:
+      context: ../notification-manager
+      dockerfile: Dockerfile
     container_name: notification-manager
     depends_on:
       - notification-mongodb
@@ -247,6 +256,11 @@ services:
   # paketlerini GitHub Packages'tan çekmek için kullanılır (bkz. conference-web-api/Dockerfile).
   conference-web-api:
     image: proysis/conference-web-api:latest
+    build:
+      context: ../conference-web-api
+      dockerfile: Dockerfile
+      args:
+        NODE_AUTH_TOKEN: ${NODE_AUTH_TOKEN:-}
     container_name: conference-web-api
     depends_on:
       redis:
@@ -288,6 +302,11 @@ services:
 
   conference-web-app:
     image: proysis/conference-web-app:latest
+    build:
+      context: ../conference-web-app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/v1}
     container_name: conference-web-app
     depends_on:
       - conference-web-api

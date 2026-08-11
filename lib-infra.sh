@@ -366,7 +366,7 @@ push_application_images() {
     fi
 
     local SERVICES=("account-manager" "conference-manager" "notification-manager" "conference-web-api" "conference-web-app")
-    local IMAGE_PREFIX="crafter-infra-"
+    local IMAGE_PREFIX="proysis/"
 
     # Docker Hub kullanıcı adı ve registry tag'i .env / ortam değişkenlerinden okunur,
     # tanımlı değillerse kullanıcıya sorulur (otomasyona uygun kalması için).
