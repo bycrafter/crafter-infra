@@ -162,8 +162,6 @@ check_and_install_docker_compose() {
 # mevcutsa yeniden klonlamaz (idempotent), böylece betik her çalıştırıldığında
 # güvenle tekrar tetiklenebilir.
 clone_application_repositories() {
-    check_and_install_git
-
     local SCRIPT_DIR
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local PARENT_DIR="${SCRIPT_DIR}/.."
