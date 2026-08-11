@@ -325,8 +325,7 @@ build_java_application_images() {
         exit 1
     fi
 
-    local SCRIPT_DIR
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local JAVA_SERVICES=("account-manager" "conference-manager" "notification-manager")
 
     echo "🐳 account-manager, conference-manager ve notification-manager image'ları build ediliyor..."
     $DOCKER_CMD build "${JAVA_SERVICES[@]}"
@@ -351,6 +350,65 @@ build_node_application_images() {
     echo "🐳 conference-web-api ve conference-web-app image'ları build ediliyor..."
     $DOCKER_CMD build "${NODE_SERVICES[@]}"
     echo "✅ Node uygulama image'ları başarıyla build edildi."
+}
+
+push_application_images() {
+    echo "📤 5 uygulama image'ı Docker Hub'a tag'lenip push ediliyor..."
+
+    local DOCKER_CMD
+    if docker compose version &> /dev/null; then
+        DOCKER_CMD="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        DOCKER_CMD="docker-compose"
+    else
+        echo "❌ Docker Compose bulunamadı! Lütfen Docker Desktop yükleyin."
+        exit 1
+    fi
+
+    local SERVICES=("account-manager" "conference-manager" "notification-manager" "conference-web-api" "conference-web-app")
+    local IMAGE_PREFIX="crafter-infra-"
+
+    # Docker Hub kullanıcı adı ve registry tag'i .env / ortam değişkenlerinden okunur,
+    # tanımlı değillerse kullanıcıya sorulur (otomasyona uygun kalması için).
+    if [ -z "${DOCKER_USERNAME:-}" ]; then
+        read -rp "Docker Hub kullanıcı adınızı girin: " DOCKER_USERNAME
+    fi
+    if [ -z "${IMAGE_TAG:-}" ]; then
+        read -rp "Registry'e push edilecek tag'i girin (örn. latest): " IMAGE_TAG
+        IMAGE_TAG="${IMAGE_TAG:-latest}"
+    fi
+
+    echo "🔐 Docker Hub'a giriş yapılıyor..."
+    docker login
+
+    for SERVICE in "${SERVICES[@]}"; do
+        echo "---------------------------------------- SEVICES ------------------------------"
+        local LOCAL_IMAGE_NAME="${IMAGE_PREFIX}${SERVICE}"
+        echo LOCAL_IMAGE_NAME
+        local LOCAL_IMAGE_ID
+        LOCAL_IMAGE_ID=$($DOCKER_CMD images -q "$LOCAL_IMAGE_NAME" | head -n1)
+        if [ -z "$LOCAL_IMAGE_ID" ]; then
+            LOCAL_IMAGE_ID=$(docker images -q "$LOCAL_IMAGE_NAME" | head -n1)
+        fi
+        echo LOCAL_IMAGE_ID
+
+        if [ -z "$LOCAL_IMAGE_ID" ] || ! docker image inspect "$LOCAL_IMAGE_ID" &> /dev/null; then
+            echo "⚠️  '${SERVICE}' (aka '${LOCAL_IMAGE_NAME}') için build edilmiş geçerli bir local image bulunamadı (image silinmiş/stale olabilir), atlanıyor. Önce './docker-image-build.sh' çalıştırıp image'ların güncel olduğundan emin olun."
+            continue
+        fi
+
+        local REMOTE_IMAGE="${DOCKER_USERNAME}/${SERVICE}:${IMAGE_TAG}"
+        echo "🏷️  ${LOCAL_IMAGE_NAME} (${LOCAL_IMAGE_ID}) -> ${REMOTE_IMAGE}"
+        docker tag "$LOCAL_IMAGE_ID" "$REMOTE_IMAGE"
+
+        echo "⬆️  ${REMOTE_IMAGE} push ediliyor..."
+        docker push "$REMOTE_IMAGE"
+
+        echo "✅ Tamamlandı: ${REMOTE_IMAGE}"
+    done
+
+    echo "----------------------------------------"
+    echo "🎉 5 repo için tüm image'lar başarıyla tag'lendi ve push edildi!"
 }
 
 start_docker_infrastructure() {

@@ -104,6 +104,13 @@ sudo ./aws/install --update
 rm -rf awscliv2.zip aws/
 ```
 
+Right after installing the AWS CLI, configure your AWS credentials (needed to fetch secrets) — do this at the start, before installing the remaining tools:
+
+```bash
+aws configure
+# Enter your AWS Access Key ID, Secret Access Key, default region (eu-central-1) and output format (json)
+```
+
 **macOS (Homebrew):**
 
 ```bash
@@ -166,12 +173,7 @@ jq --version
 unzip -v
 ```
 
-Finally, configure your AWS credentials (needed to fetch secrets):
-
-```bash
-aws configure
-# Enter your AWS Access Key ID, Secret Access Key, default region (eu-central-1) and output format (json)
-```
+> AWS credentials should already be configured at this point (see the AWS CLI installation step above) — this is only a reminder to double check before continuing.
 
 ## Directory Structure
 
@@ -266,9 +268,28 @@ After `start-infra.sh` completes, the whole YACS platform is up and running:
 
 ## Manual Setup (Without Running the Scripts)
 
-If you can't or don't want to execute `docker-image-build.sh` / `start-infra.sh` directly (e.g. `.sh` files are blocked on your machine), you don't need to reproduce every step of the scripts manually — you only need to install the required tools yourself. Once they're installed and on your `PATH`, the scripts (or the Quick Start commands) will work normally.
+The application Docker images are **already built and pushed** to the registry, so in the normal case you don't need to build anything yourself — you only need to execute `start-infra.sh` to pull the images and bring up the full stack:
 
-See [Installing prerequisites manually](#installing-prerequisites-manually) above for the exact per-platform commands to install `git`, `docker`, `docker compose`, `mvn`, `node`, `npm`, `aws` (CLI), `jq` and `unzip`, then run `aws configure` to set up your AWS credentials.
+```bash
+chmod +x start-infra.sh
+./start-infra.sh
+```
+
+`start-infra.sh` only checks that `git`, `docker` and `docker compose` are already present on your `PATH` (no AWS CLI installation/configuration is required for this step); see [Installing prerequisites manually](#installing-prerequisites-manually) above if any of them is missing.
+
+If you need to (re)build the images yourself (e.g. after changing application code), you can run `docker-image-build.sh` to build them locally:
+
+```bash
+chmod +x docker-image-build.sh
+./docker-image-build.sh
+```
+
+And if you need to publish newly built images to the registry, run `docker-image-registiry.sh` (docker registry push):
+
+```bash
+chmod +x docker-image-registiry.sh
+./docker-image-registiry.sh
+```
 
 ## Services & Ports
 

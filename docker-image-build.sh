@@ -34,5 +34,3 @@ check_and_install_docker
 check_and_install_docker_compose
 
 build_java_application_images
-
-build_node_application_images

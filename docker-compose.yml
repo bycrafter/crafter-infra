@@ -138,9 +138,7 @@ services:
   # olanların) container'a aktarılması gerekir; aşağıda ${AWS_*} ile host
   # ortamından geçirilir.
   account-manager:
-    build:
-      context: ../account-manager
-      dockerfile: Dockerfile
+    image: proysis/account-manager:latest
     container_name: account-manager
     depends_on:
       account-postgres:
@@ -179,9 +177,7 @@ services:
       - redis
 
   conference-manager:
-    build:
-      context: ../conference-manager
-      dockerfile: Dockerfile
+    image: proysis/conference-manager:latest
     container_name: conference-manager
     depends_on:
       conference-postgres:
@@ -219,9 +215,7 @@ services:
       - redis
 
   notification-manager:
-    build:
-      context: ../notification-manager
-      dockerfile: Dockerfile
+    image: proysis/notification-manager:latest
     container_name: notification-manager
     depends_on:
       - notification-mongodb
@@ -252,11 +246,7 @@ services:
   # Node/NestJS BFF: NODE_AUTH_TOKEN sadece build-time'da @bycrafter/*-grpc-contract
   # paketlerini GitHub Packages'tan çekmek için kullanılır (bkz. conference-web-api/Dockerfile).
   conference-web-api:
-    build:
-      context: ../conference-web-api
-      dockerfile: Dockerfile
-      args:
-        NODE_AUTH_TOKEN: ${NODE_AUTH_TOKEN:-}
+    image: proysis/conference-web-api:latest
     container_name: conference-web-api
     depends_on:
       redis:
@@ -297,11 +287,7 @@ services:
       - redis
 
   conference-web-app:
-    build:
-      context: ../conference-web-app
-      dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/v1}
+    image: proysis/conference-web-app:latest
     container_name: conference-web-app
     depends_on:
       - conference-web-api
