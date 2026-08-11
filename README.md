@@ -12,6 +12,7 @@ This repository is the **master orchestrator** of the YACS platform. It doesn't 
 
 ## Table of Contents
 
+- [Default Admin Login](#default-admin-login)
 - [Architecture Overview](#architecture-overview)
 - [Prerequisites](#prerequisites)
 - [Directory Structure](#directory-structure)
@@ -21,6 +22,15 @@ This repository is the **master orchestrator** of the YACS platform. It doesn't 
 - [Services & Ports](#services--ports)
 - [Networks & Volumes](#networks--volumes)
 - [Useful Commands](#useful-commands)
+
+## Default Admin Login
+
+After the infrastructure is up and running, you can log in to the application using the default admin credentials:
+
+- **Username:** `superadmin`
+- **Password:** `admin123`
+
+> ⚠️ It is strongly recommended to change these default credentials after the first login.
 
 ## Architecture Overview
 
