@@ -8,7 +8,7 @@ This repository is the **master orchestrator** of the YACS platform. It doesn't 
 - **BFF** — `conference-web-api` (NestJS Backend-for-Frontend)
 - **Core Backends** — `account-manager` and `conference-manager` (Spring Boot / R2DBC)
 - **Notification Service** — `notification-manager` (Spring Boot / MongoDB)
-- **Backing services** — PostgreSQL (x2), Redis, Kafka (KRaft mode), MongoDB, Zipkin
+- **Backing services** — PostgreSQL (x2), Redis, Kafka (KRaft mode), MongoDB
 
 ## Table of Contents
 
@@ -33,7 +33,6 @@ This repository is the **master orchestrator** of the YACS platform. It doesn't 
 | `redis` | Shared cache, used by `account-manager`, `conference-manager`, `conference-web-api` | — |
 | `kafka` | Event bus (KRaft, single broker) used by all three Java services | — |
 | `notification-mongodb` | MongoDB store for `notification-manager` | — |
-| `zipkin` | Distributed tracing UI | — |
 | `account-manager` | Account/auth core backend (Spring Boot, gRPC) | `account-postgres`, `redis`, `kafka` |
 | `conference-manager` | Conference core backend (Spring Boot, gRPC) | `conference-postgres`, `redis`, `kafka` |
 | `notification-manager` | Notification/email service (Spring Boot) | `notification-mongodb`, `kafka` |
@@ -262,7 +261,6 @@ After `start-infra.sh` completes, the whole YACS platform is up and running:
 
 - Frontend: **http://localhost:8080**
 - BFF (API): **http://localhost:3000**
-- Zipkin tracing UI: **http://localhost:9411**
 
 > `start-infra.sh` always tears down any previous stack first (`docker compose down -v`, plus force-removal of known containers and the local Mongo data directory), so it's safe to re-run at any time to get a clean restart.
 
@@ -286,7 +284,6 @@ See [Installing prerequisites manually](#installing-prerequisites-manually) abov
 | `redis` | `6379` | Shared cache |
 | `kafka` | `9092` → `29092` (host listener) | Event bus, also reachable at `kafka:9092` from other containers |
 | `notification-mongodb` | `27017` | MongoDB for `notification-manager` |
-| `zipkin` | `9411` | Tracing UI |
 
 Every application service also declares an `extra_hosts: host.docker.internal:host-gateway` entry, so you can stop any one of them and run it locally from your IDE (for debugging) — the remaining containers can still reach it via `host.docker.internal:<port>`, once you override the corresponding `*_URL` variable in `.env`.
 
