@@ -21,7 +21,6 @@ check_and_install_docker_compose
 check_and_install_unzip
 check_and_install_jq
 check_and_install_aws_cli
-check_and_install_maven
 
 # 2. AWS Güvenlik Doğrulamasını Yap
 verify_aws_credentials

@@ -3,6 +3,10 @@
 # Herhangi bir hata oluşursa betiği derhal durdur
 set -e
 
+
+# Hata durumunda terminali açık tut
+trap 'if [ $? -ne 0 ]; then echo "❌ Hata oluştu! Lütfen yukarıdaki hata mesajını inceleyin."; read -p "Çıkmak için bir tuşa basın..."; fi' EXIT
+
 # =====================================================================
 #             SUPPORTING METHODS (YARDIMCI METOTLAR)
 # =====================================================================
@@ -28,9 +32,6 @@ clone_application_repositories
 # 2. Gereksinimleri Kontrol Et ve Gerekirse Kur
 check_and_install_docker
 check_and_install_docker_compose
-check_and_install_maven
-check_and_install_node
-check_and_install_npm
 
 build_java_application_images
 

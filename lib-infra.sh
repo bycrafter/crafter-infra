@@ -42,8 +42,6 @@ install_system_package() {
             elif [ "$PACKAGE_NAME" = "unzip" ]; then
                 # Git Bash genelde unzip ile gelir ancak yoksa kurulur
                 winget.exe install -e --id GNU.Unzip --accept-source-agreements --accept-package-agreements --silent
-            elif [ "$PACKAGE_NAME" = "maven" ]; then
-                winget.exe install -e --id Apache.Maven --accept-source-agreements --accept-package-agreements --silent
             elif [ "$PACKAGE_NAME" = "nodejs" ]; then
                 winget.exe install -e --id OpenJS.NodeJS --accept-source-agreements --accept-package-agreements --silent
             elif [ "$PACKAGE_NAME" = "git" ]; then
@@ -76,42 +74,6 @@ check_and_install_jq() {
         install_system_package "jq"
     else
         echo "✅ 'jq' zaten kurulu."
-    fi
-}
-
-check_and_install_maven() {
-    if ! command -v mvn &> /dev/null; then
-        echo "⚠️  'mvn' bulunamadı. Kuruluyor..."
-        install_system_package "maven"
-    else
-        echo "✅ 'mvn' zaten kurulu."
-    fi
-}
-
-check_and_install_node() {
-    if ! command -v node &> /dev/null; then
-        echo "⚠️  'node' bulunamadı. Kuruluyor..."
-        install_system_package "nodejs"
-    else
-        echo "✅ 'node' zaten kurulu ($(node -v))."
-    fi
-}
-
-check_and_install_npm() {
-    if ! command -v npm &> /dev/null; then
-        echo "⚠️  'npm' bulunamadı. Kuruluyor..."
-        install_system_package "npm"
-    else
-        echo "✅ 'npm' zaten kurulu ($(npm -v))."
-    fi
-}
-
-check_and_install_git() {
-    if ! command -v git &> /dev/null; then
-        echo "⚠️  'git' bulunamadı. Kuruluyor..."
-        install_system_package "git"
-    else
-        echo "✅ 'git' zaten kurulu ($(git --version))."
     fi
 }
 
@@ -339,18 +301,6 @@ down_docker_infrastructure() {
         fi
     done
 
-    # NOT: "$DOCKER_CMD down -v" sadece named volume'ları siler, ancak
-    # notification-mongodb servisi için host'a bind-mount edilen
-    # ./.docker/mongo-data dizinini SİLMEZ. Bu dizin bir önceki çalıştırmadan
-    # (örn. hatalı/eksik init) dolu kalırsa, Mongo /data/db boş olmadığı için
-    # docker-entrypoint-initdb.d altındaki mongo-init.sh script'ini BİR DAHA
-    # ÇALIŞTIRMAZ ve notification-manager app kullanıcısı asla oluşturulmaz.
-    # Bu durumda uygulama var olmayan bir kullanıcıyla bağlanmaya çalışır ve
-    # driver, kullanıcıyı bulamadığı için SCRAM-SHA-1'e fallback yapar:
-    # "MongoSecurityException: Exception authenticating MongoCredential{
-    # mechanism=SCRAM-SHA-1, ...}". Bunu önlemek için her altyapı yeniden
-    # başlatmasında bu dizini temizleyip Mongo'nun init script'lerini
-    # sıfırdan çalıştırmasını garanti ediyoruz.
     local SCRIPT_DIR
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local MONGO_DATA_DIR="${SCRIPT_DIR}/.docker/mongo-data"
@@ -379,41 +329,6 @@ build_java_application_images() {
 
     local SCRIPT_DIR
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-    # account-manager, conference-manager ve notification-manager'ın
-    # Dockerfile'ları runtime-only'dir (kaynak kodu container içinde
-    # derlemez); dolayısıyla "docker compose build" öncesinde ilgili
-    # repo'nun jar'ının host üzerinde üretilmiş olması gerekir.
-    local JAVA_SERVICES=("account-manager" "conference-manager" "notification-manager")
-    local NEEDS_MVNW=false
-    for service in "${JAVA_SERVICES[@]}"; do
-        if [ ! -x "${SCRIPT_DIR}/../${service}/mvnw" ]; then
-            NEEDS_MVNW=true
-            break
-        fi
-    done
-    # mvnw wrapper'ı olmayan servisler sistemdeki 'mvn' komutuna ihtiyaç
-    # duyar; bu yüzden gerekiyorsa build'den önce Maven kurulumunu garantiye alıyoruz.
-    if [ "$NEEDS_MVNW" = true ]; then
-        check_and_install_maven
-    fi
-
-    for service in "${JAVA_SERVICES[@]}"; do
-        local SERVICE_DIR="${SCRIPT_DIR}/../${service}"
-        if [ ! -d "$SERVICE_DIR" ]; then
-            echo "⚠️  ${SERVICE_DIR} bulunamadı, ${service} için jar build adımı atlanıyor."
-            continue
-        fi
-
-        echo "📦 ${service} jar'ı build ediliyor..."
-        pushd "$SERVICE_DIR" > /dev/null
-        if [ -x "./mvnw" ]; then
-            ./mvnw -pl "${service}-app" -am package -DskipTests
-        else
-            mvn -pl "${service}-app" -am package -DskipTests
-        fi
-        popd > /dev/null
-    done
 
     echo "🐳 account-manager, conference-manager ve notification-manager image'ları build ediliyor..."
     $DOCKER_CMD build "${JAVA_SERVICES[@]}"
